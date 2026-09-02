@@ -11,6 +11,16 @@ def _rel(path, cfg):
     return path
 
 
+def _sig(hit):
+    """ヒットの内訳を表示用の文字列にする。
+    「スコア」は RRF の融合値で、順位から決まる固定値（1位=0.01639…）なので
+    当たり外れの判断には使えない。BM25 の生スコア（一致度）を必ず併記する。"""
+    sig = hit.get("signals") or {}
+    bm = sig.get("bm25")
+    vec = sig.get("vector")
+    return ("-" if bm is None else f"{bm:.2f}"), ("-" if vec is None else f"{vec:.3f}")
+
+
 def to_json(result, cfg):
     out = dict(result)
     for h in out["hits"]:
@@ -21,10 +31,11 @@ def to_json(result, cfg):
 def to_tsv(result, cfg):
     """1行=1ヒット。セルに改行・タブが入らないよう潰す。
     スプレッドシートの AI 関数（例 =AI("要約して", A2:D9)）の参照範囲にそのまま使える。"""
-    rows = ["順位\tファイル\tタイトル\tスコア\t本文"]
+    rows = ["順位\tファイル\tタイトル\t一致度\t意味的な近さ\t本文"]
     for i, h in enumerate(result["hits"], 1):
         body = h["snippet"].replace("\t", " ").replace("\n", " ")
-        rows.append(f"{i}\t{_rel(h['path'], cfg)}\t{h['title']}\t{h['score']}\t{body}")
+        bm, vec = _sig(h)
+        rows.append(f"{i}\t{_rel(h['path'], cfg)}\t{h['title']}\t{bm}\t{vec}\t{body}")
     return "\n".join(rows)
 
 
@@ -45,10 +56,12 @@ def to_html(result, cfg):
              f"<p class='meta'>件数 {len(result['hits'])} / モード {e(result['mode'])}"
              f"{' / ベクトル併用' if result['vector_used'] else ' / キーワードのみ'}</p>"]
     for i, h in enumerate(result["hits"], 1):
+        bm, vec = _sig(h)
         parts.append(
             f"<article class='hit'><h3>[{i}] {e(h['title'] or '(無題)')}</h3>"
             f"<p class='path'><a href='file:///{e(h['path'].replace(os.sep, '/'))}' target='_blank'>"
-            f"{e(_rel(h['path'], cfg))}</a> <span class='score'>score {h['score']}</span></p>"
+            f"{e(_rel(h['path'], cfg))}</a> "
+            f"<span class='score'>一致度 {bm}{'' if vec == '-' else ' / 意味的な近さ ' + vec}</span></p>"
             f"<pre>{e(h['snippet'])}</pre></article>")
     return "\n".join(parts)
 

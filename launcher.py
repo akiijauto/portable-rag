@@ -15,6 +15,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(HERE, "launcher.json")
+RAG_CONFIG_PATH = os.path.join(HERE, "config.json")     # portable-rag の設定（検索対象フォルダ）
+RAG_DEFAULT_EXTS = (".html", ".htm", ".txt", ".md")     # rag/config.py の既定と同じ
+COUNT_CAP = 50000                                       # 件数カウントの上限（巨大フォルダで固まらないため）
 IS_WIN = sys.platform.startswith("win")
 
 DEFAULT_CONFIG = {
@@ -95,6 +98,77 @@ def status():
     return res
 
 
+# ---- 検索対象フォルダ（config.json の source_dirs）を画面から設定する ----
+
+def _read_rag_raw():
+    """config.json をそのまま読む（無ければ None）。
+    rag.config.load_config は絶対パス化と既定値の合成をするので、書き戻しには使わない。"""
+    if not os.path.exists(RAG_CONFIG_PATH):
+        return None
+    with open(RAG_CONFIG_PATH, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _count_targets(folder, exts):
+    """対象拡張子のファイル数（上限あり）。「そのフォルダで合っているか」を人が確かめる目安。"""
+    n = 0
+    for _, _, files in os.walk(folder):
+        for fn in files:
+            if fn.lower().endswith(exts) and not fn.startswith(("~$", ".")):
+                n += 1
+                if n >= COUNT_CAP:
+                    return n, True
+    return n, False
+
+
+def rag_source_dirs():
+    raw = _read_rag_raw()
+    if raw is None:
+        return {"available": False, "dirs": []}
+    exts = tuple(raw.get("extensions") or RAG_DEFAULT_EXTS)
+    out = []
+    for d in raw.get("source_dirs") or []:
+        full = os.path.abspath(os.path.join(HERE, d))   # 相対パスは config.json の場所が基準（rag/config.py と同じ）
+        ok = os.path.isdir(full)
+        cnt, capped = _count_targets(full, exts) if ok else (0, False)
+        out.append({"raw": d, "path": full, "exists": ok, "files": cnt, "capped": capped})
+    return {"available": True, "dirs": out, "extensions": list(exts)}
+
+
+def save_rag_source_dirs(dirs):
+    raw = _read_rag_raw()
+    if raw is None:
+        raise FileNotFoundError("config.json が見つかりません（launcher.py と同じフォルダに必要です）")
+    cleaned = []
+    for d in dirs:
+        d = str(d).strip().strip('"')
+        if d and d not in cleaned:
+            cleaned.append(d)
+    if not cleaned:
+        raise ValueError("検索対象フォルダは1つ以上必要です")
+    raw["source_dirs"] = cleaned
+    with open(RAG_CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(raw, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+
+
+def list_subdirs(folder):
+    """フォルダ選択用：直下のサブフォルダ一覧。空ならホームから始める。"""
+    folder = os.path.abspath(folder) if folder else os.path.expanduser("~")
+    if not os.path.isdir(folder):
+        return {"folder": folder, "parent": None, "dirs": []}
+    dirs = []
+    try:
+        for fn in sorted(os.listdir(folder)):
+            p = os.path.join(folder, fn)
+            if os.path.isdir(p) and not fn.startswith((".", "$")):
+                dirs.append({"name": fn, "path": p})
+    except PermissionError:
+        pass
+    parent = os.path.dirname(folder)
+    return {"folder": folder, "parent": parent if parent != folder else None, "dirs": dirs}
+
+
 PAGE = r"""<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>コントロールUI</title>
 <style>
 :root{--btn-h:64px;--btn-fs:16px;--desc-fs:13px}
@@ -115,6 +189,9 @@ aside h2{font-size:14px;margin:0 0 8px}#log{max-height:200px;overflow:auto;backg
 ul#files{list-style:none;padding:0;margin:0;max-height:150px;overflow:auto;border:1px solid #ddd;border-radius:6px}
 ul#files li{padding:4px 6px;cursor:pointer;border-bottom:1px solid #eee}ul#files li:hover{background:#eef4fb}
 .small{font-size:11px;color:#777}.card .tools{display:none;gap:4px}.edit .card .tools{display:flex}.tools button{font-size:11px;padding:2px 6px;cursor:pointer}
+ul.list{list-style:none;padding:0;margin:0 0 6px;max-height:180px;overflow:auto;border:1px solid #ddd;border-radius:6px}
+ul.list li{padding:4px 6px;border-bottom:1px solid #eee;word-break:break-all}ul.list li button{font-size:11px;padding:1px 6px;cursor:pointer}
+ul.pick li{cursor:pointer}ul.pick li:hover{background:#eef4fb}.warn{color:#b00}#rag input{width:100%;box-sizing:border-box;font-size:13px;padding:4px}
 @media(max-width:800px){main{grid-template-columns:1fr}}
 </style></head><body>
 <header><h1 id="title"></h1>
@@ -123,7 +200,12 @@ ul#files li{padding:4px 6px;cursor:pointer;border-bottom:1px solid #eee}ul#files
 <button id="toggleEdit">ボタンを編集</button></header>
 <main><section><div id="grid"></div></section>
 <aside>
-<h2>説明</h2><div id="desc" class="d">ボタンにマウスを乗せると説明が出ます。クリックで実行します。</div>
+<div id="rag"><h2>検索対象フォルダ</h2>
+<ul id="srclist" class="list"></ul>
+<div class="row"><input id="srcnew" placeholder="フォルダのパスを貼り付け"><button id="srcpick" style="flex:0 0 auto">参照</button><button id="srcadd" style="flex:0 0 auto">追加</button></div>
+<ul id="srcpicker" class="list pick" style="display:none"></ul>
+<p class="small">検索したい HTML があるフォルダ（Google ドライブの同期フォルダなど）。変えたら「RAG 索引更新」を押してください。</p></div>
+<h2 style="margin-top:12px">説明</h2><div id="desc" class="d">ボタンにマウスを乗せると説明が出ます。クリックで実行します。</div>
 <h2 style="margin-top:12px">実行状況</h2><div id="log">まだ何も実行していません。</div>
 <div id="editor"><h2 style="margin-top:12px">ボタンの追加・編集</h2>
 <input type="hidden" id="idx" value="-1">
@@ -168,6 +250,26 @@ $('browse').onclick=async()=>{const r=await api('/api/list?folder='+encodeURICom
 setInterval(async()=>{const s=await api('/api/status');const run=s.filter(x=>x.running);const done=s.filter(x=>!x.running);
  if(s.length)$('log').textContent=(run.length?`実行中: ${run.map(x=>x.name).join(', ')}\n`:'')+done.slice(-5).map(x=>`終了: ${x.name} (終了コード ${x.code})`).join('\n');},2000);
 api('/api/config').then(c=>{cfg=c;render();});
+// ---- 検索対象フォルダ ----
+let rag=null;
+async function loadRag(){rag=await api('/api/ragconfig');const ul=$('srclist');ul.innerHTML='';
+ if(!rag.available){$('rag').style.display='none';return;}
+ rag.dirs.forEach((d,i)=>{const li=document.createElement('li');
+  const st=d.exists?`対象ファイル ${d.files.toLocaleString()}${d.capped?' 件以上':' 件'}`:'<span class="warn">フォルダが見つかりません</span>';
+  li.innerHTML=`<div>${esc(d.path)}</div><div class="small">${st} <button class="srcdel">外す</button></div>`;
+  li.querySelector('.srcdel').onclick=async()=>{if(!confirm('この検索対象フォルダを外しますか？（フォルダ自体は消えません）'))return;await saveRag(rag.dirs.map(x=>x.raw).filter((_,j)=>j!==i));};
+  ul.appendChild(li);});
+ if(!rag.dirs.length)ul.innerHTML='<li class="warn">検索対象フォルダが未設定です。下の欄から追加してください。</li>';}
+async function saveRag(dirs){const r=await api('/api/ragconfig',{source_dirs:dirs});if(r.error){alert(r.error);return;}$('srcnew').value='';$('srcpicker').style.display='none';await loadRag();}
+$('srcadd').onclick=()=>{const v=$('srcnew').value.trim();if(!v){alert('フォルダのパスを入れるか「参照」で選んでください');return;}saveRag([...rag.dirs.map(x=>x.raw),v]);};
+async function pick(folder){const r=await api('/api/subdirs?folder='+encodeURIComponent(folder||''));const ul=$('srcpicker');ul.style.display='';ul.innerHTML='';
+ const head=document.createElement('li');head.innerHTML=`<b>${esc(r.folder)}</b> <button class="srcuse">このフォルダにする</button>`;head.style.cursor='default';
+ head.querySelector('.srcuse').onclick=e=>{e.stopPropagation();$('srcnew').value=r.folder;ul.style.display='none';};ul.appendChild(head);
+ if(r.parent){const up=document.createElement('li');up.textContent='↑ 上のフォルダへ';up.onclick=()=>pick(r.parent);ul.appendChild(up);}
+ r.dirs.forEach(d=>{const li=document.createElement('li');li.textContent='📁 '+d.name;li.onclick=()=>pick(d.path);ul.appendChild(li);});
+ if(!r.dirs.length){const li=document.createElement('li');li.className='small';li.textContent='（サブフォルダなし）';li.style.cursor='default';ul.appendChild(li);}}
+$('srcpick').onclick=()=>pick($('srcnew').value.trim());
+loadRag();
 </script></body></html>"""
 
 
@@ -194,6 +296,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json(load_config())
         elif u.path == "/api/list":
             self._json(list_dir(qs.get("folder", [""])[0]))
+        elif u.path == "/api/ragconfig":
+            self._json(rag_source_dirs())
+        elif u.path == "/api/subdirs":
+            self._json(list_subdirs(qs.get("folder", [""])[0]))
         elif u.path == "/api/status":
             self._json(status())
         else:
@@ -205,6 +311,12 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/config":
             save_config(body)
             self._json({"ok": True})
+        elif self.path == "/api/ragconfig":
+            try:
+                save_rag_source_dirs(body.get("source_dirs", []))
+                self._json({"ok": True})
+            except Exception as e:  # ユーザーに見せる
+                self._json({"error": str(e)})
         elif self.path == "/api/run":
             cfg = load_config()
             try:

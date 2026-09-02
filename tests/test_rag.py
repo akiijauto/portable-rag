@@ -73,7 +73,9 @@ class TestPipeline(unittest.TestCase):
         res = Searcher(self.cfg).search("請求書 発行", top_k=2)
         tsv = FORMATS["tsv"](res, self.cfg)
         self.assertEqual(len(tsv.split("\n")), len(res["hits"]) + 1)
-        self.assertEqual(tsv.split("\n")[1].count("\t"), 4)  # 5列
+        self.assertEqual(tsv.split("\n")[1].count("\t"), 5)  # 6列: 順位/ファイル/タイトル/一致度/意味的な近さ/本文
+        self.assertIn("一致度", tsv.split("\n")[0])
+        self.assertNotEqual(tsv.split("\n")[1].split("\t")[3], "-")  # BM25 の生スコアが入っている
         self.assertIn("# 参考情報", FORMATS["prompt"](res, self.cfg))
         self.assertIn("<article", FORMATS["html"](res, self.cfg))
         json.loads(FORMATS["json"](res, self.cfg))

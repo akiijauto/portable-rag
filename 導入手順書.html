@@ -22,9 +22,11 @@ README.html / 要件定義.html / 振り返り.html / 導入手順書.html</pre>
 <div class="note">メールの添付で .bat が弾かれる場合があります。その時は zip の中の <code>.bat</code> を <code>.txt</code> に改名して送り、業務PCで元に戻してください。または .bat を使わず、コマンドプロンプトで <code>python rag_app.py</code> のように直接実行しても同じです。</div>
 
 <h2>4. 検索対象フォルダを設定する</h2>
-<div class="step"><b class="n">1</b><code>config.json</code> を右クリック →「プログラムから開く」→ メモ帳。</div>
-<div class="step"><b class="n">2</b><code>"source_dirs"</code> の行を、HTML が入っているフォルダに書き換える。区切りは <code>/</code> にする。<pre>"source_dirs": ["G:/マイドライブ/業務文書"],</pre>複数のフォルダを見る場合は <code>["G:/A", "G:/B"]</code> のようにカンマで並べる。</div>
-<div class="step"><b class="n">3</b>上書き保存して閉じる。</div>
+<div class="step"><b class="n">1</b><code>launcher.bat</code> をダブルクリック。ブラウザでコントロールUI が開く。</div>
+<div class="step"><b class="n">2</b>右側の「<b>検索対象フォルダ</b>」で「参照」を押し、HTML が入っているフォルダまで辿って「このフォルダにする」→「追加」。フォルダのパスが分かっていれば、欄に貼り付けて「追加」でもよい。複数のフォルダを見る場合は同じ操作を繰り返す。</div>
+<div class="step"><b class="n">3</b>一覧に「対象ファイル ○○ 件」と出ることを確認する。<b>0 件</b>なら HTML が無いフォルダ、<b>赤字で「フォルダが見つかりません」</b>ならパスが違う。</div>
+<div class="step"><b class="n">4</b>最初から入っている <code>sample_docs</code>（動作確認用サンプル）は「外す」で外す。残しておくとサンプル文書も検索結果に混ざる。</div>
+<div class="note">メモ帳で <code>config.json</code> の <code>"source_dirs"</code> を直接書いても同じです（例：<code>"source_dirs": ["G:/マイドライブ/業務文書"]</code>、区切りは <code>/</code>）。コントロールUI は同じファイルを書き換えているだけです。</div>
 <div class="note">索引（<code>index</code> フォルダ）には文書の中身が入ります。Google ドライブの同期フォルダではなく、PC 内（既定の <code>./index</code>）に置いたままにしてください。</div>
 
 <h2>5. 索引を作る（初回・文書を追加した時）</h2>
@@ -68,7 +70,7 @@ README.html / 要件定義.html / 振り返り.html / 導入手順書.html</pre>
 <h2>9. 困ったとき</h2>
 <table><tr><th style="width:36%">症状</th><th>対処</th></tr>
 <tr><td>bat をダブルクリックしても一瞬で閉じる</td><td>コマンドプロンプトでフォルダに移動し <code>python rag_app.py</code> と打つとエラー内容が見えます。</td></tr>
-<tr><td>「フォルダが見つかりません」</td><td><code>config.json</code> のパスを確認。<code>\</code> は <code>/</code> に。</td></tr>
+<tr><td>「フォルダが見つかりません」</td><td>コントロールUI の「検索対象フォルダ」で赤字のフォルダを「外す」→「参照」で選び直す。<code>config.json</code> を直接書いた場合は <code>\</code> を <code>/</code> に。</td></tr>
 <tr><td>検索結果が 0 件</td><td>索引を作っていない可能性。<code>build_index.bat</code> を実行。</td></tr>
 <tr><td>文字化け</td><td>UTF-8 と Shift_JIS は自動判定。それ以外は README.html の FAQ を参照。</td></tr>
 <tr><td>ポートが使用中と出る</td><td><code>config.json</code> の <code>web_port</code>（検索）、<code>python launcher.py --port 8777</code>（コントロールUI）で変更。</td></tr>

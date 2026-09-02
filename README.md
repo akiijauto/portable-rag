@@ -4,10 +4,10 @@ API 不可・Google ドライブのみ・インストール不要という制約
 
 - 標準ライブラリのみで動作（BM25 / 文字 bigram / SQLite 転置索引 / 差分更新）
 - `sentence-transformers` 導入時のみベクトル検索を自動併用（RRF 統合）
-- 出力：TSV（スプレッドシート）/ Gemini 貼付用プロンプト / HTML / JSON
+- 出力：TSV（スプレッドシート）/ Gemini 貼付用プロンプト / HTML / JSON。TSV と HTML には BM25 の生スコア（一致度）を出す
 - `python rag_app.py` で localhost の Web UI
 - `python bundle.py`：系列（フォルダ / ファイル名規則 / 文書内項目 / 検索結果）ごとに NotebookLM・Gemini 用の結合ファイルと要約依頼文を作る
-- `python launcher.py`：任意の .py / .bat をボタン登録して実行するコントロールUI（大きさ3段階・1〜3列）
+- `python launcher.py`：任意の .py / .bat をボタン登録して実行するコントロールUI（大きさ3段階・1〜3列）。検索対象フォルダ（`config.json` の `source_dirs`）の追加・削除もここから行う
 
 初心者向けの導入手順は [導入手順書.html](導入手順書.html)（A4想定）。詳細は [README.html](README.html)（導入手順）、[要件定義.html](要件定義.html)、[振り返り.html](振り返り.html) を参照。
 
