@@ -1,0 +1,79 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>導入手順書 - portable-rag と コントロールUI</title><style>@page{size:A4;margin:18mm}html{background:#e9e9e9}body{font-family:system-ui,"Segoe UI","Meiryo",sans-serif;width:210mm;box-sizing:border-box;padding:18mm;margin:16px auto;background:#fff;line-height:1.7;color:#222;font-size:11pt}h1{font-size:20pt;border-bottom:2px solid #1f3a5f;color:#1f3a5f;padding-bottom:4px}h2{font-size:14pt;border-left:6px solid #2b6cb0;padding-left:8px;margin-top:28px;page-break-after:avoid}h3{font-size:12pt;margin-bottom:4px}table{border-collapse:collapse;width:100%;font-size:10pt;page-break-inside:avoid}th,td{border:1px solid #bbb;padding:5px 8px;text-align:left;vertical-align:top}th{background:#eef2f7}code{background:#f2f2f2;padding:1px 4px;border-radius:3px;font-size:10pt}pre{background:#f6f6f6;padding:8px 10px;border-radius:4px;font-size:10pt;white-space:pre-wrap;page-break-inside:avoid}.step{border:1px solid #cfd8e3;border-radius:6px;padding:8px 12px;margin:10px 0;page-break-inside:avoid}.step b.n{display:inline-block;background:#2b6cb0;color:#fff;border-radius:50%;width:22px;height:22px;text-align:center;line-height:22px;margin-right:6px;font-size:10pt}.note{background:#fff8e1;border-left:4px solid #f0b400;padding:6px 10px;margin:8px 0}.ok{color:#0a7}@media print{html{background:#fff}body{margin:0;padding:0;width:auto}}</style></head><body>
+<h1>導入手順書：ローカルRAG検索 と コントロールUI</h1>
+<p>版：2026-09-02　対象：業務用のノートPC（Windows、Python あり、管理者権限なし）<br>この手順書は A4 サイズで作成しています。画面で読む前提ですが、そのまま印刷もできます。</p>
+
+<h2>1. これは何をするものか</h2>
+<table><tr><th style="width:28%">ソフト</th><th>できること</th></tr>
+<tr><td>ローカルRAG検索<br><code>rag_app.py</code></td><td>フォルダにある HTML 文書（約5,000件）を検索し、結果を「Gemini に貼る文章」「スプレッドシートに貼る表」「人が読む一覧」の3形式で出します。外部通信はしません。</td></tr>
+<tr><td>コントロールUI<br><code>launcher.py</code></td><td>自分で作った .py / .bat をボタンとして並べ、クリックで実行します。ボタン名の下に説明を表示でき、大きさ（小・中・大）と並び（1〜3列）を変えられます。</td></tr></table>
+
+<h2>2. 事前に確認すること（1分）</h2>
+<div class="step"><b class="n">1</b>スタートメニューで「cmd」と入力し、コマンドプロンプトを開く。</div>
+<div class="step"><b class="n">2</b>次を入力して Enter。<pre>python --version</pre><code>Python 3.9.x</code> 以上の数字が出れば OK。「認識されていません」と出る場合はPC の管理担当に Python の有無を確認してください（Microsoft Store 版 Python でも動きます）。</div>
+
+<h2>3. ファイルを業務PCに置く</h2>
+<div class="step"><b class="n">1</b>メールで受け取った <code>portable-rag.zip</code> を、<b>ドキュメント</b>など自分のフォルダに保存する。</div>
+<div class="step"><b class="n">2</b>zip を右クリック →「すべて展開」。展開先の例：<code>C:\Users\（自分の名前）\Documents\portable-rag</code></div>
+<div class="step"><b class="n">3</b>展開したフォルダを開き、次のファイルがあることを確認する。<pre>build_index.bat   索引を作る（ダブルクリック）
+run_search.bat    検索画面を開く（ダブルクリック）
+launcher.bat      コントロールUI を開く（ダブルクリック）
+config.json       検索対象フォルダの設定
+README.html / 要件定義.html / 振り返り.html / 導入手順書.html</pre></div>
+<div class="note">メールの添付で .bat が弾かれる場合があります。その時は zip の中の <code>.bat</code> を <code>.txt</code> に改名して送り、業務PCで元に戻してください。または .bat を使わず、コマンドプロンプトで <code>python rag_app.py</code> のように直接実行しても同じです。</div>
+
+<h2>4. 検索対象フォルダを設定する</h2>
+<div class="step"><b class="n">1</b><code>config.json</code> を右クリック →「プログラムから開く」→ メモ帳。</div>
+<div class="step"><b class="n">2</b><code>"source_dirs"</code> の行を、HTML が入っているフォルダに書き換える。区切りは <code>/</code> にする。<pre>"source_dirs": ["G:/マイドライブ/業務文書"],</pre>複数のフォルダを見る場合は <code>["G:/A", "G:/B"]</code> のようにカンマで並べる。</div>
+<div class="step"><b class="n">3</b>上書き保存して閉じる。</div>
+<div class="note">索引（<code>index</code> フォルダ）には文書の中身が入ります。Google ドライブの同期フォルダではなく、PC 内（既定の <code>./index</code>）に置いたままにしてください。</div>
+
+<h2>5. 索引を作る（初回・文書を追加した時）</h2>
+<div class="step"><b class="n">1</b><code>build_index.bat</code> をダブルクリック。黒い窓が開いて進行状況が出る。</div>
+<div class="step"><b class="n">2</b>最後に次のような行が出れば完了。<pre>追加 5000 / 更新 0 / 変更なし 0 / 削除 0  文書 5000 件, チャンク 17627 件  (33.5s)</pre>5,000件で 30秒〜2分程度。2回目からは変更分だけなので数秒です。</div>
+<div class="step"><b class="n">3</b>「ベクトル検索: 無効」と出ても正常です。キーワード検索だけで動きます（意味検索を試す場合は第8章）。</div>
+
+<h2>6. 検索する</h2>
+<div class="step"><b class="n">1</b><code>run_search.bat</code> をダブルクリック。ブラウザで <code>http://127.0.0.1:8765</code> が開く。</div>
+<div class="step"><b class="n">2</b>検索語を入れて「検索」。例：<code>返品 送料 負担</code>（単語はスペース区切り）。</div>
+<div class="step"><b class="n">3</b>上のタブで出力形式を切り替え、「コピー」を押す。</div>
+<table><tr><th style="width:30%">使いたい場面</th><th>操作</th></tr>
+<tr><td>ブラウザの Gemini に聞く</td><td>「Gemini貼付用」→ コピー → Gemini の入力欄に貼り付けて送信。質問と根拠資料がセットで入っています。</td></tr>
+<tr><td>スプレッドシートの AI 関数</td><td>「スプレッドシート用(TSV)」→ コピー → シートの A1 に貼り付け（自動で列に分かれます）→ 別のセルに <code>=AI("この資料を根拠に○○を答えて", A2:E9)</code></td></tr>
+<tr><td>自分で過去事例を探す</td><td>「閲覧」タブ。ファイル名のリンクで元の HTML が開きます。</td></tr></table>
+<div class="step"><b class="n">4</b>終わるときは黒い窓を閉じる（または Ctrl+C）。</div>
+
+<h2>7. コントロールUI を使う</h2>
+<div class="step"><b class="n">1</b><code>launcher.bat</code> をダブルクリック。ブラウザで <code>http://127.0.0.1:8766</code> が開き、「RAG 索引更新」「RAG 検索画面」の2つのボタンが最初から並んでいる。</div>
+<div class="step"><b class="n">2</b><b>実行する</b>：ボタンをクリック。別の黒い窓が開いてプログラムが動き、右側の「実行状況」に「起動しました」「終了（終了コード 0）」と出る。</div>
+<div class="step"><b class="n">3</b><b>説明を見る</b>：ボタンにマウスを乗せると右側の「説明」欄に表示される。ボタンの下にも常に表示される。</div>
+<div class="step"><b class="n">4</b><b>自分のプログラムを追加する</b>：右上「ボタンを編集」→ 右側の「フォルダから選ぶ」にプログラムのあるフォルダのパスを貼り付け →「一覧」→ ファイル名をクリック → ボタン名と説明を入力 →「保存」。<br>パスはエクスプローラーのアドレス欄をクリックしてコピーできます。</div>
+<div class="step"><b class="n">5</b><b>並べ替え・削除</b>：編集モード中、各ボタンの下の「↑ ↓ 編集 削除」。削除してもプログラムのファイルは消えません。</div>
+<div class="step"><b class="n">6</b><b>大きさと並び</b>：上部の「ボタンの大きさ：小・中・大」「並び：1列・2列・3列」。設定は <code>launcher.json</code> に自動保存され、次回も同じ配置で開きます。</div>
+<div class="note">動かせるのは <code>.py</code> と <code>.bat</code>（<code>.cmd</code>）だけです。<code>.py</code> はコントロールUI と同じ Python で実行されます。</div>
+
+<h2>8. 意味検索を試す（任意・pip が使える場合）</h2>
+<div class="step"><b class="n">1</b>コマンドプロンプトで portable-rag フォルダに移動し、<pre>pip install -r requirements-optional.txt</pre></div>
+<div class="step"><b class="n">2</b><code>build_index.bat</code> を再実行。初回は約120MBのモデルがダウンロードされ、続けてベクトル化が始まる（5,000件で数分〜数十分）。</div>
+<div class="step"><b class="n">3</b>検索画面の「ハイブリッド」がキーワード＋意味検索。効果が無ければ <code>config.json</code> の <code>"use_embeddings"</code> を <code>"false"</code> にすると元に戻ります。</div>
+
+<h2>9. 困ったとき</h2>
+<table><tr><th style="width:36%">症状</th><th>対処</th></tr>
+<tr><td>bat をダブルクリックしても一瞬で閉じる</td><td>コマンドプロンプトでフォルダに移動し <code>python rag_app.py</code> と打つとエラー内容が見えます。</td></tr>
+<tr><td>「フォルダが見つかりません」</td><td><code>config.json</code> のパスを確認。<code>\</code> は <code>/</code> に。</td></tr>
+<tr><td>検索結果が 0 件</td><td>索引を作っていない可能性。<code>build_index.bat</code> を実行。</td></tr>
+<tr><td>文字化け</td><td>UTF-8 と Shift_JIS は自動判定。それ以外は README.html の FAQ を参照。</td></tr>
+<tr><td>ポートが使用中と出る</td><td><code>config.json</code> の <code>web_port</code>（検索）、<code>python launcher.py --port 8777</code>（コントロールUI）で変更。</td></tr>
+<tr><td>索引を作り直したい</td><td><code>index</code> フォルダを自分で削除してから <code>build_index.bat</code>。</td></tr></table>
+
+<h2>10. ファイル一覧</h2>
+<table><tr><th style="width:36%">ファイル</th><th>役割</th></tr>
+<tr><td><code>build_index.py / .bat</code></td><td>索引の作成・差分更新</td></tr>
+<tr><td><code>search.py</code></td><td>コマンドライン検索（<code>--format tsv --out 結果.tsv</code> でファイル出力）</td></tr>
+<tr><td><code>rag_app.py / run_search.bat</code></td><td>検索画面（ブラウザ）</td></tr>
+<tr><td><code>launcher.py / launcher.bat</code></td><td>コントロールUI</td></tr>
+<tr><td><code>config.json</code></td><td>検索の設定</td></tr>
+<tr><td><code>launcher.json</code></td><td>コントロールUI のボタン設定（初回起動時に自動作成）</td></tr>
+<tr><td><code>rag/</code></td><td>検索エンジン本体（触らなくてよい）</td></tr>
+<tr><td><code>sample_docs/</code></td><td>動作確認用の HTML 6件</td></tr>
+<tr><td><code>tests/test_rag.py</code></td><td>動作確認テスト（<code>python tests/test_rag.py</code>）</td></tr></table>
+</body></html>
