@@ -49,7 +49,8 @@ python search.py "返品 送料 負担" --mode bm25 --top 20          # キー�
 
 <h2>4-4. 系列まとめ（中間ファイル作成）</h2>
 <p>NotebookLM は最大 300 ソース、Gemini チャットは最大 10 ファイルまでしか渡せません。<code>bundle.py</code> は文書を「系列」ごとに集め、上限に収まる大きなファイルと、Gemini に要約させるための依頼文を作ります。</p>
-<pre>python bundle.py                                   # 対話メニュー（bundle.bat でも可）
+<p>初心者向けにはブラウザ画面版 <code>python bundle_app.py</code>（<code>bundle.bat</code> / コントロールUI の「系列まとめ」）を使います。分け方を選んで「分け方を確認」→ グループ数を見てから「まとめを作る」の流れで、黒い窓の操作は不要です。以下はコマンド版。</p>
+<pre>python bundle.py                                   # 対話メニュー（コマンド版）
 python bundle.py --by folder                       # サブフォルダごと
 python bundle.py --by "name:^(?P&lt;series&gt;[^_]+)_"    # ファイル名の先頭〜'_' を系列名に
 python bundle.py --by "field:顧客名"                # 本文の「顧客名: ○○」の値ごと

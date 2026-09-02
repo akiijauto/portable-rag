@@ -1,4 +1,4 @@
 @echo off
 cd /d %~dp0
-python bundle.py
+python bundle_app.py
 pause

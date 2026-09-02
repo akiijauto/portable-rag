@@ -55,12 +55,12 @@ README.html / 要件定義.html / 振り返り.html / 導入手順書.html</pre>
 
 <h2>7-2. 系列まとめ（NotebookLM / Gemini に渡す中間ファイル）</h2>
 <p>NotebookLM は 300 ソース、Gemini は 10 ファイルまでです。文書を「系列」ごとにまとめ、上限に収まる大きなファイルと、Gemini に要約させる依頼文を作ります。</p>
-<div class="step"><b class="n">1</b><code>bundle.bat</code> をダブルクリック（またはコントロールUIの「系列まとめ」ボタン）。</div>
-<div class="step"><b class="n">2</b>黒い窓の質問に番号で答える。系列の決め方は「1 フォルダごと / 2 ファイル名の規則 / 3 文書内の項目（顧客名など） / 4 検索結果」。モードは「1 単純結合 / 2 要約依頼 / 3 両方」。</div>
-<div class="step"><b class="n">3</b><code>bundles</code> フォルダに系列ごとのフォルダができる。<code>bundles/index.html</code> を開くと件数と分割数の一覧。</div>
+<div class="step"><b class="n">1</b>コントロールUI の「系列まとめ」ボタン（または <code>bundle.bat</code> をダブルクリック）。ブラウザで画面が開く。黒い窓も一緒に開くが、閉じずにそのままにしておく。</div>
+<div class="step"><b class="n">2</b>画面の「1」で分け方を選ぶ（フォルダごと / ファイル名の先頭 / 文書の中の項目 / 検索して集める）。「<b>分け方を確認</b>」を押すと、何個のグループに分かれるかがその場で出る。「(未分類)」が多ければ分け方を変える。</div>
+<div class="step"><b class="n">3</b>「2」で作るものにチェック（全文ファイル / 要約依頼文）。「<b>まとめを作る</b>」を押すと結果の表と「次にやること」が出る。「フォルダを開く」でそのまま出力先が開く。</div>
 <div class="step"><b class="n">4</b><b>要約を作る</b>：<code>summary_prompt</code> の中のテキストを 1 つずつ Gemini に貼る → 返ってきた要約を <code>（系列名）_要約.md</code> に貼って保存。この .md を検索対象フォルダに置くと RAG でも検索できます。</div>
 <div class="step"><b class="n">5</b><b>全文を渡す</b>：<code>notebooklm</code> のファイルを NotebookLM のソースに、<code>gemini</code> のファイルを Gemini チャットに添付。</div>
-<div class="note">一覧に ⚠ が出た系列は上限で打ち切られています。系列をさらに細かく分けるか、「定型行を除く」を y にして小さくしてください。</div>
+<div class="note">結果に「⚠一部省略」が出たグループは上限で打ち切られています。分け方を細かくするか、「定型文を取り除いて小さくする」にチェックを入れてもう一度作ってください。コマンドで動かしたい場合は <code>python bundle.py --by folder</code> のように従来どおり使えます。</div>
 
 <h2>8. 意味検索を試す（任意・pip が使える場合）</h2>
 <div class="step"><b class="n">1</b>コマンドプロンプトで portable-rag フォルダに移動し、<pre>pip install -r requirements-optional.txt</pre></div>

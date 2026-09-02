@@ -151,6 +151,31 @@ class TestBundle(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(tmp, "out", "index.html")))
         shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_bundle_app_inputs_and_preview(self):
+        import bundle_app
+        self.assertEqual(bundle_app.make_by({"kind": "folder"}), "folder")
+        self.assertEqual(bundle_app.make_by({"kind": "name", "sep": "_"}), "name:^(?P<series>[^_]+)_")
+        self.assertEqual(bundle_app.make_by({"kind": "name", "sep": "-", "regex": "^(?P<series>x)"}), "name:^(?P<series>x)")
+        self.assertEqual(bundle_app.make_by({"kind": "field", "label": " 顧客名 "}), "field:顧客名")
+        for bad in ({}, {"kind": "field", "label": ""}, {"kind": "search", "query": " "},
+                    {"kind": "name", "regex": "^([a-z]+)"}, {"kind": "name", "sep": "|"}):
+            with self.assertRaises(ValueError):
+                bundle_app.make_by(bad)
+        self.assertEqual(bundle_app.make_mode({"full": True, "summary": True}), "both")
+        self.assertEqual(bundle_app.make_mode({"summary": True}), "summary")
+        with self.assertRaises(ValueError):
+            bundle_app.make_mode({})
+        tmp = tempfile.mkdtemp()
+        cfgp = os.path.join(tmp, "config.json")
+        with open(cfgp, "w", encoding="utf-8") as f:
+            json.dump({"source_dirs": [os.path.join(ROOT, "sample_docs")], "index_dir": "./index",
+                       "use_embeddings": "false"}, f)
+        rows = bundle_app.preview(load_config(cfgp), "name:^(?P<series>[^_]+)_")
+        self.assertIn("faq", {r["series"] for r in rows})
+        self.assertEqual(sum(r["docs"] for r in rows), 6)          # サンプル6件がすべてどこかに入る
+        self.assertTrue(all(r["chars"] is None for r in rows))     # name はパスだけで数える（本文は読まない）
+        shutil.rmtree(tmp, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

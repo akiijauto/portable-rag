@@ -29,10 +29,11 @@ DEFAULT_CONFIG = {
          "path": os.path.join(HERE, "build_index.py"), "args": ""},
         {"name": "RAG 検索画面", "desc": "ブラウザで検索画面を開きます。結果は Gemini 貼付用 / スプレッドシート用にコピーできます。",
          "path": os.path.join(HERE, "rag_app.py"), "args": ""},
-        {"name": "系列まとめ", "desc": "文書を系列ごとに集め、NotebookLM / Gemini 用の大きなファイルと要約依頼文を bundles フォルダに作ります。黒い窓で質問に答えてください。",
-         "path": os.path.join(HERE, "bundle.py"), "args": ""},
+        {"name": "系列まとめ", "desc": "文書をテーマや相手ごとにまとめて、NotebookLM / Gemini に渡せる大きなファイルと要約依頼文を作ります。ブラウザの画面で選んで実行します。",
+         "path": os.path.join(HERE, "bundle_app.py"), "args": ""},
     ],
 }
+BUNDLE_APP_DESC = DEFAULT_CONFIG["buttons"][-1]["desc"]
 
 processes = {}   # pid -> (Popen, name)
 
@@ -43,6 +44,12 @@ def load_config():
             cfg = json.load(f)
         for k, v in DEFAULT_CONFIG.items():
             cfg.setdefault(k, v)
+        for b in cfg.get("buttons", []):
+            # 旧版の「系列まとめ」（黒い窓の bundle.py）は、同じ場所に画面版があればそちらへ差し替える
+            if os.path.basename(b.get("path", "")) == "bundle.py":
+                new = os.path.join(os.path.dirname(b["path"]), "bundle_app.py")
+                if os.path.exists(new):
+                    b["path"], b["desc"] = new, BUNDLE_APP_DESC
         return cfg
     return json.loads(json.dumps(DEFAULT_CONFIG))
 
