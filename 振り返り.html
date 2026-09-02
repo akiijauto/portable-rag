@@ -1,0 +1,32 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>振り返り - ローカルRAG 開発</title><style>body{font-family:system-ui,"Segoe UI","Meiryo",sans-serif;max-width:900px;margin:32px auto;padding:0 16px;line-height:1.7;color:#222}h1{border-bottom:2px solid #333}h2{border-left:5px solid #0a7;padding-left:8px;margin-top:32px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px 10px;text-align:left;vertical-align:top}th{background:#f2f2f2}code,pre{background:#f6f6f6;border-radius:4px}pre{padding:10px;overflow-x:auto}code{padding:1px 4px}.note{background:#fff8e1;border-left:4px solid #f0b400;padding:8px 12px}</style></head><body>
+<h1>振り返り：ローカルRAG 開発（2026-09-02）</h1>
+
+<h2>1. 取り組みの要約</h2>
+<p>「API 不可・ドライブのみ・インストール不要」という制約を、標準ライブラリだけで満たす RAG 検索を作った。BM25 転置索引を SQLite に持ち、意味検索はライブラリがある時だけ自動で有効になる二段構えにした。5,000件の合成データで構築 33秒・検索 0.4秒を確認。</p>
+
+<h2>2. 起きた課題と解決</h2>
+<table><tr><th>#</th><th>課題</th><th>原因</th><th>解決</th><th>学び</th></tr>
+<tr><td>1</td><td>タイトルが取れず本文の先頭行が使われた</td><td>HTML パーサで <code>head</code> タグを丸ごと読み飛ばしていたため <code>title</code> も消えていた</td><td>読み飛ばし対象から <code>head</code> を外し、script/style/noscript だけを除外</td><td>「余計なものを除外する」処理は、除外しすぎを必ずテストで確認する</td></tr>
+<tr><td>2</td><td>Web UI がスレッドエラーで落ちた</td><td>SQLite 接続をメインスレッドで作り、リクエスト処理スレッドから使った</td><td><code>check_same_thread=False</code> にし、サーバーも単一スレッドの <code>HTTPServer</code> へ変更</td><td>ローカル1人用ツールは並列化しない方が単純で堅い</td></tr>
+<tr><td>3</td><td>ブラウザで検索ボタンを押しても結果が出ない</td><td>JS で要素を <code>top</code>・<code>status</code> という id で参照していたが、これは <code>window.top</code>／<code>window.status</code> という予約済み名前で衝突した</td><td><code>document.getElementById</code> 経由に統一</td><td>id をそのまま変数として使わない。ブラウザ実行テストで初めて発覚した種類のバグ</td></tr>
+<tr><td>4</td><td>テストの期待件数が合わない</td><td>英語文書は日本語クエリにヒットしないので当然の結果だった</td><td>期待値を固定数ではなくヒット数に連動させた</td><td>テストは「仕様」を書く。実装の都合で数を決め打ちしない</td></tr>
+<tr><td>5</td><td>索引ファイルが 197MB と大きめ</td><td>bigram の転置索引を SQLite の行で持つため用語文字列が重複保存される</td><td>今回は許容（5,000件で十分動く）。将来は用語 ID 化や postings の圧縮で 1/3 程度にできる</td><td>まず動くものを出し、規模が増えたら最適化する</td></tr></table>
+
+<h2>3. 判断した設計方針</h2>
+<ul><li><b>形態素解析器を使わない。</b>辞書インストールが要るため制約に反する。文字 bigram で「返品／送料／負担」のような業務語は十分に当たる。</li>
+<li><b>AI 本体を含めない。</b>回答生成は Gemini やスプレッドシートに任せ、このツールは「根拠を探して整える」役に徹する。制約の中で最も価値が出る分担。</li>
+<li><b>索引は git に入れない。</b>機密を含むため <code>.gitignore</code> で除外。コードだけをリポジトリで管理する。</li>
+<li><b>意味検索は「あれば使う」。</b>pip 可の PC では効果を試せ、不可の PC でも同じコードが動く。</li></ul>
+
+<h2>4. テスト結果</h2>
+<table><tr><th>種別</th><th>内容</th><th>結果</th></tr>
+<tr><td>機能テスト</td><td><code>tests/test_rag.py</code> 10項目（抽出・分割・トークン化・検索・英語・差分更新・削除・出力形式・設定検証）</td><td>全件合格</td></tr>
+<tr><td>ブラウザテスト</td><td>Playwright(Chromium) で UI を操作：検索→2件表示→TSV/プロンプト切替→差分更新ボタン</td><td>合格（サーバー側エラーなし）</td></tr>
+<tr><td>性能テスト</td><td>合成 HTML 5,000件（17,627チャンク）</td><td>構築 33.5秒 / 検索 0.43秒 / 差分更新 0.1秒</td></tr></table>
+
+<h2>5. 次にやると良いこと</h2>
+<ol><li>実データ数十件で検索精度を確認し、chunk_size（600）と top_k（8）を調整する</li>
+<li>pip 可の PC で意味検索を有効化し、ハイブリッドとキーワードのみを同じ質問で比較する</li>
+<li>問い合わせメールは「件名・質問・回答」を分けて索引化すると、類似案件検索の精度が上がる見込み</li>
+<li>索引サイズ削減（用語 ID 化）は 1万件を超えたら着手</li></ol>
+</body></html>

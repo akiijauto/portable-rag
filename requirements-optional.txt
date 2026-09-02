@@ -1,0 +1,4 @@
+# 意味検索（ベクトル）を使う場合のみ。無くてもキーワード検索は動く。
+# pip install -r requirements-optional.txt
+sentence-transformers>=3.0
+numpy

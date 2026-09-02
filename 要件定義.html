@@ -1,0 +1,58 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>要件定義 - ローカルRAG（HTML 5000件・インストール不要）</title><style>body{font-family:system-ui,"Segoe UI","Meiryo",sans-serif;max-width:900px;margin:32px auto;padding:0 16px;line-height:1.7;color:#222}h1{border-bottom:2px solid #333}h2{border-left:5px solid #0a7;padding-left:8px;margin-top:32px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px 10px;text-align:left;vertical-align:top}th{background:#f2f2f2}code,pre{background:#f6f6f6;border-radius:4px}pre{padding:10px;overflow-x:auto}code{padding:1px 4px}.note{background:#fff8e1;border-left:4px solid #f0b400;padding:8px 12px}</style></head><body>
+<h1>要件定義：ローカル完結 RAG 検索システム</h1>
+<p>作成日 2026-09-02　対象 <code>projects/38_local_rag</code></p>
+
+<h2>1. 背景と目的</h2>
+<p>業務用のノートPCには制限があり、外部 API は使えず、共有手段は Google ドライブのみ。手元にある約5,000件の HTML 文書（テンプレート型の業務文書と、非定型の問い合わせ回答メール）を AI が参照しやすい形で検索・出力できる仕組みが必要。</p>
+<p>目的は「検索した根拠をそのまま AI（ブラウザの Gemini、スプレッドシートの AI 関数）に渡せる」こと。AI 本体はこのソフトに含めず、検索と整形に専念する。</p>
+
+<h2>2. 前提条件（ヒアリング結果）</h2>
+<table><tr><th>項目</th><th>内容</th></tr>
+<tr><td>実行環境</td><td>業務用のノートPC。Python 本体あり、pip でのライブラリ導入は可。管理者権限インストールは不可</td></tr>
+<tr><td>データ</td><td>HTML 約5,000件、主に日本語、機密情報を含む、定期的に追加・更新される</td></tr>
+<tr><td>参照する AI</td><td>①スプレッドシートの AI 関数（セル範囲参照）②ブラウザの Gemini に貼り付け ③人が過去の類似案件として検索</td></tr>
+<tr><td>検索方式</td><td>キーワード検索を基本とし、意味検索（ベクトル）も試せること</td></tr>
+<tr><td>共有手段</td><td>Google ドライブ（ローカル同期フォルダ）のみ</td></tr></table>
+
+<h2>3. 機能要件</h2>
+<table><tr><th>ID</th><th>要件</th><th>実装</th></tr>
+<tr><td>F-1</td><td>指定フォルダ配下の HTML/TXT/MD を再帰的に読み込み、本文とタイトルを抽出する</td><td><code>rag/html_extract.py</code>（script/style 除去、cp932/utf-8 自動判定）</td></tr>
+<tr><td>F-2</td><td>差分更新。追加・更新・削除されたファイルだけを再インデックスする</td><td><code>rag/indexer.py</code>（mtime+size+sha1 で判定）</td></tr>
+<tr><td>F-3</td><td>日本語のキーワード検索（形態素解析器なし）</td><td>文字 bigram + 英数字単語、BM25、完全一致フレーズ加点</td></tr>
+<tr><td>F-4</td><td>意味検索（任意）。ライブラリが無ければ自動で無効</td><td><code>rag/embed.py</code>、multilingual-e5-small、RRF でハイブリッド統合</td></tr>
+<tr><td>F-5</td><td>出力形式：TSV（スプレッドシート）/ 貼付用プロンプト（Gemini）/ HTML（閲覧）/ JSON</td><td><code>rag/formats.py</code></td></tr>
+<tr><td>F-6</td><td>ブラウザから使えるローカル UI（検索・形式切替・コピー・差分更新ボタン）</td><td><code>rag_app.py</code>（標準ライブラリ http.server、127.0.0.1 のみ待受）</td></tr>
+<tr><td>F-7</td><td>コマンドラインからも検索でき、ファイルへ書き出せる</td><td><code>search.py --format tsv --out result.tsv</code></td></tr>
+<tr><td>F-8</td><td>同一文書からの結果は最大2チャンクに制限し、複数文書を並べる</td><td><code>rag/search.py</code></td></tr></table>
+
+<h2>4. 非機能要件</h2>
+<table><tr><th>項目</th><th>要件</th><th>確認結果</th></tr>
+<tr><td>インストール不要</td><td>標準ライブラリのみで全機能（意味検索を除く）が動く</td><td>numpy/bs4 の無い環境でテスト合格</td></tr>
+<tr><td>ローカル完結</td><td>外部通信ゼロ。Web UI は localhost のみ</td><td>コードに外部 URL への通信なし（モデル取得時を除く）</td></tr>
+<tr><td>性能</td><td>5,000件を数分以内に索引化、検索1秒以内</td><td>5,000件 17,627チャンク：構築 33.5秒、検索 0.4秒、差分更新 0.1秒</td></tr>
+<tr><td>可搬性</td><td>索引は SQLite ファイル1個。ドライブ経由で別PCへ持ち運べる</td><td><code>index/rag.sqlite</code></td></tr>
+<tr><td>安全性</td><td>索引ファイルは機密を含むため git 管理外</td><td><code>.gitignore</code> で <code>index/</code> を除外</td></tr></table>
+
+<h2>5. 構成</h2>
+<pre>Google ドライブ同期フォルダ（HTML 5000件）
+      │  build_index.py（差分読込）
+      ▼
+index/rag.sqlite（文書・チャンク・転置索引・ベクトル）
+      │  search.py / rag_app.py
+      ▼
+BM25 ─┬─ RRF 統合 ─→ 上位 K 件 ─→ TSV / プロンプト / HTML / JSON
+ベクトル（任意）┘                       │
+                     スプレッドシート AI 関数 ／ ブラウザ Gemini ／ 人の閲覧</pre>
+
+<h2>6. スコープ外</h2>
+<ul><li>AI による回答生成そのもの（外部 API が使えないため）</li>
+<li>Google ドライブ API との連携（ローカル同期フォルダを参照する）</li>
+<li>OCR、PDF、Office 文書の読み込み（将来拡張候補）</li></ul>
+
+<h2>7. 検討した代替案</h2>
+<table><tr><th>案</th><th>採否</th><th>理由</th></tr>
+<tr><td>形態素解析器（MeCab/Sudachi）</td><td>不採用</td><td>辞書のインストールが必要。bigram で 5,000件規模なら実用精度</td></tr>
+<tr><td>Whoosh / rank_bm25 等の外部ライブラリ</td><td>不採用</td><td>pip 不可の PC でも動くよう標準ライブラリで自作</td></tr>
+<tr><td>Flask Web UI</td><td>不採用</td><td>依存を増やさないため http.server を使用</td></tr>
+<tr><td>ベクトル DB（Chroma 等）</td><td>不採用</td><td>17,000 ベクトル程度なら SQLite + 総当たりで十分</td></tr></table>
+</body></html>
