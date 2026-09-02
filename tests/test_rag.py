@@ -107,5 +107,48 @@ class TestPipeline(unittest.TestCase):
             load_config(p)
 
 
+
+
+class TestBundle(unittest.TestCase):
+    def test_split_respects_limits(self):
+        from bundle import split_blocks
+        blocks = ["a" * 1000] * 30
+        parts, trunc = split_blocks(blocks, 5000, 10)
+        self.assertEqual(len(parts), 6)
+        self.assertFalse(trunc)
+        self.assertTrue(all(len(p) <= 5000 for p in parts))
+        parts, trunc = split_blocks(blocks, 1000, 3)
+        self.assertEqual(len(parts), 3)
+        self.assertTrue(trunc)
+
+    def test_compact_removes_common_lines(self):
+        from bundle import compact
+        docs = [("a", "t", "共通の署名行\n個別1"), ("b", "t", "共通の署名行\n個別2"), ("c", "t", "共通の署名行\n個別3")]
+        out = compact(docs)
+        self.assertTrue(all("共通の署名行" not in b for _, _, b in out))
+        self.assertIn("個別2", out[1][2])
+
+    def test_field_value(self):
+        from bundle import field_value
+        self.assertEqual(field_value("件名\t送料について\n本文 x", "件名"), "送料について")
+        self.assertEqual(field_value("顧客名: 株式会社A/B", "顧客名"), "株式会社A_B")
+        self.assertIsNone(field_value("なし", "顧客名"))
+
+    def test_build_by_name(self):
+        from bundle import build
+        tmp = tempfile.mkdtemp()
+        cfgp = os.path.join(tmp, "config.json")
+        with open(cfgp, "w", encoding="utf-8") as f:
+            json.dump({"source_dirs": [os.path.join(ROOT, "sample_docs")], "index_dir": "./index",
+                       "use_embeddings": "false"}, f)
+        rep = build(load_config(cfgp), "name:^(?P<series>[^_]+)_", "both", os.path.join(tmp, "out"), log=lambda *_: None)
+        names = {r["series"] for r in rep}
+        self.assertIn("faq", names)
+        self.assertTrue(os.path.exists(os.path.join(tmp, "out", "faq", "gemini", "faq_part01.txt")))
+        self.assertTrue(os.path.exists(os.path.join(tmp, "out", "faq", "summary_prompt", "faq_要約依頼01.txt")))
+        self.assertTrue(os.path.exists(os.path.join(tmp, "out", "index.html")))
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

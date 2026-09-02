@@ -51,6 +51,15 @@ README.html / 要件定義.html / 振り返り.html / 導入手順書.html</pre>
 <div class="step"><b class="n">6</b><b>大きさと並び</b>：上部の「ボタンの大きさ：小・中・大」「並び：1列・2列・3列」。設定は <code>launcher.json</code> に自動保存され、次回も同じ配置で開きます。</div>
 <div class="note">動かせるのは <code>.py</code> と <code>.bat</code>（<code>.cmd</code>）だけです。<code>.py</code> はコントロールUI と同じ Python で実行されます。</div>
 
+<h2>7-2. 系列まとめ（NotebookLM / Gemini に渡す中間ファイル）</h2>
+<p>NotebookLM は 300 ソース、Gemini は 10 ファイルまでです。文書を「系列」ごとにまとめ、上限に収まる大きなファイルと、Gemini に要約させる依頼文を作ります。</p>
+<div class="step"><b class="n">1</b><code>bundle.bat</code> をダブルクリック（またはコントロールUIの「系列まとめ」ボタン）。</div>
+<div class="step"><b class="n">2</b>黒い窓の質問に番号で答える。系列の決め方は「1 フォルダごと / 2 ファイル名の規則 / 3 文書内の項目（顧客名など） / 4 検索結果」。モードは「1 単純結合 / 2 要約依頼 / 3 両方」。</div>
+<div class="step"><b class="n">3</b><code>bundles</code> フォルダに系列ごとのフォルダができる。<code>bundles/index.html</code> を開くと件数と分割数の一覧。</div>
+<div class="step"><b class="n">4</b><b>要約を作る</b>：<code>summary_prompt</code> の中のテキストを 1 つずつ Gemini に貼る → 返ってきた要約を <code>（系列名）_要約.md</code> に貼って保存。この .md を検索対象フォルダに置くと RAG でも検索できます。</div>
+<div class="step"><b class="n">5</b><b>全文を渡す</b>：<code>notebooklm</code> のファイルを NotebookLM のソースに、<code>gemini</code> のファイルを Gemini チャットに添付。</div>
+<div class="note">一覧に ⚠ が出た系列は上限で打ち切られています。系列をさらに細かく分けるか、「定型行を除く」を y にして小さくしてください。</div>
+
 <h2>8. 意味検索を試す（任意・pip が使える場合）</h2>
 <div class="step"><b class="n">1</b>コマンドプロンプトで portable-rag フォルダに移動し、<pre>pip install -r requirements-optional.txt</pre></div>
 <div class="step"><b class="n">2</b><code>build_index.bat</code> を再実行。初回は約120MBのモデルがダウンロードされ、続けてベクトル化が始まる（5,000件で数分〜数十分）。</div>

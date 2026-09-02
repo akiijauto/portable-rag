@@ -6,6 +6,7 @@ API 不可・Google ドライブのみ・インストール不要という制約
 - `sentence-transformers` 導入時のみベクトル検索を自動併用（RRF 統合）
 - 出力：TSV（スプレッドシート）/ Gemini 貼付用プロンプト / HTML / JSON
 - `python rag_app.py` で localhost の Web UI
+- `python bundle.py`：系列（フォルダ / ファイル名規則 / 文書内項目 / 検索結果）ごとに NotebookLM・Gemini 用の結合ファイルと要約依頼文を作る
 - `python launcher.py`：任意の .py / .bat をボタン登録して実行するコントロールUI（大きさ3段階・1〜3列）
 
 初心者向けの導入手順は [導入手順書.html](導入手順書.html)（A4想定）。詳細は [README.html](README.html)（導入手順）、[要件定義.html](要件定義.html)、[振り返り.html](振り返り.html) を参照。
@@ -15,5 +16,6 @@ python build_index.py            # 索引の作成・差分更新
 python search.py "返品 送料" --format prompt
 python rag_app.py                # http://127.0.0.1:8765
 python launcher.py               # コントロールUI http://127.0.0.1:8766
+python bundle.py                 # 系列まとめ（対話メニュー）
 python tests/test_rag.py         # テスト
 ```

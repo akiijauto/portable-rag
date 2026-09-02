@@ -46,6 +46,21 @@ python search.py "返品 送料 負担" --format tsv --out result.tsv  # スプ�
 python search.py "返品 送料 負担" --format html --out result.html
 python search.py "返品 送料 負担" --mode bm25 --top 20          # キーワードのみ / 件数変更</pre>
 
+<h2>4-4. 系列まとめ（中間ファイル作成）</h2>
+<p>NotebookLM は最大 300 ソース、Gemini チャットは最大 10 ファイルまでしか渡せません。<code>bundle.py</code> は文書を「系列」ごとに集め、上限に収まる大きなファイルと、Gemini に要約させるための依頼文を作ります。</p>
+<pre>python bundle.py                                   # 対話メニュー（bundle.bat でも可）
+python bundle.py --by folder                       # サブフォルダごと
+python bundle.py --by "name:^(?P&lt;series&gt;[^_]+)_"    # ファイル名の先頭〜'_' を系列名に
+python bundle.py --by "field:顧客名"                # 本文の「顧客名: ○○」の値ごと
+python bundle.py --by "search:返品 送料" --top 50   # 検索上位50件を1系列に
+python bundle.py --by folder --mode summary --compact   # 要約依頼のみ・定型行を除去</pre>
+<table><tr><th>出力（bundles/&lt;系列&gt;/）</th><th>内容</th></tr>
+<tr><td><code>notebooklm/*.txt</code></td><td>本文を連結し 30万文字ごとに分割（最大300）。NotebookLM のソースに追加</td></tr>
+<tr><td><code>gemini/*.txt</code></td><td>12万文字ごとに分割（最大10）。Gemini チャットに添付</td></tr>
+<tr><td><code>summary_prompt/*.txt</code></td><td>Gemini に貼る要約依頼文。返ってきた要約を <code>&lt;系列&gt;_要約.md</code> に貼って保管</td></tr>
+<tr><td><code>index.html</code></td><td>系列ごとの件数・分割数の一覧。⚠ は上限で打ち切り</td></tr></table>
+<p class="note">要約 .md を検索対象フォルダに置けば RAG からも検索できます（<code>extensions</code> に .md を含めています）。</p>
+
 <h2>5. AI への渡し方</h2>
 <table><tr><th>使い方</th><th>手順</th></tr>
 <tr><td>ブラウザの Gemini</td><td>「Gemini貼付用」をコピーして貼り付ける。質問と根拠資料がセットになった文章が入る</td></tr>

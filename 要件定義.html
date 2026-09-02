@@ -23,6 +23,7 @@
 <tr><td>F-5</td><td>出力形式：TSV（スプレッドシート）/ 貼付用プロンプト（Gemini）/ HTML（閲覧）/ JSON</td><td><code>rag/formats.py</code></td></tr>
 <tr><td>F-6</td><td>ブラウザから使えるローカル UI（検索・形式切替・コピー・差分更新ボタン）</td><td><code>rag_app.py</code>（標準ライブラリ http.server、127.0.0.1 のみ待受）</td></tr>
 <tr><td>F-7</td><td>コマンドラインからも検索でき、ファイルへ書き出せる</td><td><code>search.py --format tsv --out result.tsv</code></td></tr>
+<tr><td>F-9</td><td>系列ごとの中間ファイル生成。系列はフォルダ / ファイル名規則 / 文書内項目 / 検索結果で定義。単純結合（NotebookLM 300・Gemini 10 の上限に合わせ分割）と、Gemini に厳選要約を依頼するプロンプト生成の2モード。定型行除去オプション</td><td><code>bundle.py</code></td></tr>
 <tr><td>F-8</td><td>同一文書からの結果は最大2チャンクに制限し、複数文書を並べる</td><td><code>rag/search.py</code></td></tr></table>
 
 <h2>4. 非機能要件</h2>

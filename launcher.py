@@ -26,6 +26,8 @@ DEFAULT_CONFIG = {
          "path": os.path.join(HERE, "build_index.py"), "args": ""},
         {"name": "RAG 検索画面", "desc": "ブラウザで検索画面を開きます。結果は Gemini 貼付用 / スプレッドシート用にコピーできます。",
          "path": os.path.join(HERE, "rag_app.py"), "args": ""},
+        {"name": "系列まとめ", "desc": "文書を系列ごとに集め、NotebookLM / Gemini 用の大きなファイルと要約依頼文を bundles フォルダに作ります。黒い窓で質問に答えてください。",
+         "path": os.path.join(HERE, "bundle.py"), "args": ""},
     ],
 }
 
