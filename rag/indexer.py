@@ -32,6 +32,13 @@ def build(cfg, full=False, log=print):
     now = datetime.datetime.now().isoformat(timespec="seconds")
     seen, added, updated, skipped, removed = set(), 0, 0, 0, 0
     t0 = time.time()
+    # 進捗ログは件数だけでなく「そのバッチのチャンク数」を出す。
+    # **所要時間は件数ではなくチャンク数でほぼ決まる**（実測: 相関 +0.99）。
+    # 件数だけ見ていると「10件なのに236秒」が不規則に見えるが、
+    # チャンク数を並べると大きい文書が入っていただけだと分かる。
+    every = max(1, int(cfg.get("progress_every", 100)))
+    b_chunks = b_bytes = 0
+    t_batch = t0
     for path in scan(cfg):
         seen.add(path)
         st = os.stat(path)
@@ -54,9 +61,17 @@ def build(cfg, full=False, log=print):
             added += 1
         store.add_doc(path, title, st.st_mtime, st.st_size, sha,
                       [(c, tokenize(c)) for c in chunks], now)
-        if (added + updated) % 100 == 0:
+        b_chunks += len(chunks)
+        b_bytes += st.st_size
+        if (added + updated) % every == 0:
             store.commit()
-            log(f"  {added + updated} 件処理 ({time.time() - t0:.0f}s)")
+            el = time.time() - t_batch
+            rate = f"{1000 * el / b_chunks:.1f}秒/千チャンク" if b_chunks else "-"
+            log(f"  {added + updated} 件処理  直近{every}件: "
+                f"{b_chunks:,} チャンク {b_bytes / 1048576:.1f}MB {el:.1f}s ({rate})  "
+                f"累計 {time.time() - t0:.0f}s")
+            b_chunks = b_bytes = 0
+            t_batch = time.time()
     for path, row in known.items():
         if path not in seen:
             store.delete_doc(row[1])
