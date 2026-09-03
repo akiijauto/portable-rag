@@ -12,7 +12,9 @@ import subprocess
 import sys
 import urllib.parse
 import webbrowser
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
+
+from rag import webui
 
 import bundle
 from rag.config import load_config
@@ -150,7 +152,7 @@ details{margin-top:8px;font-size:13px}summary{cursor:pointer;color:#2b6cb0}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid #ccc;border-top-color:#2b6cb0;border-radius:50%;animation:s .8s linear infinite;vertical-align:middle;margin-right:6px}
 @keyframes s{to{transform:rotate(360deg)}}
 </style></head><body>
-<header><h1>系列まとめ</h1><p>たくさんの文書を「系列」（テーマや相手ごとのグループ）に分けて、NotebookLM や Gemini にそのまま渡せる大きなファイルにまとめます。</p></header>
+<header><div style="display:flex;align-items:baseline;gap:12px"><h1 style="margin:0">系列まとめ</h1><button id="exit" style="margin-left:auto;border:1px solid #c33;color:#c33;background:#fff;padding:6px 12px;cursor:pointer">終了</button></div><p>たくさんの文書を「系列」（テーマや相手ごとのグループ）に分けて、NotebookLM や Gemini にそのまま渡せる大きなファイルにまとめます。</p></header>
 <main>
 <div class="card"><div class="src" id="src">対象フォルダを確認中…</div>
 <h2><span class="n">1</span>どうやって分けるか選ぶ</h2>
@@ -185,6 +187,16 @@ details{margin-top:8px;font-size:13px}summary{cursor:pointer;color:#2b6cb0}
 </div>
 </main>
 <script>
+async function doExit(){
+  if(!confirm('系列まとめを終了します。コマンドラインの窓も閉じます。よろしいですか？'))return;
+  try{await fetch('/api/exit',{method:'POST'});}catch(e){}
+  document.body.innerHTML='<div style="max-width:640px;margin:80px auto;'
+    +'font-family:system-ui,Meiryo,sans-serif;text-align:center;color:#444">'
+    +'<h2>終了しました</h2><p>コマンドラインの窓は自動で閉じます。</p>'
+    +'<p style="color:#888">このタブは閉じて構いません。</p></div>';
+}
+document.addEventListener('DOMContentLoaded',()=>{document.getElementById('exit').onclick=doExit;});
+
 const $=id=>document.getElementById(id);
 async function api(p,body){const r=await fetch(p,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});return r.json();}
 function esc(s){return String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
@@ -232,6 +244,8 @@ loadSrc();
 
 def make_handler(cfg):
     class H(BaseHTTPRequestHandler):
+        server_ref = None      # webui.serve が差し込む
+
         def _send(self, body, ctype="application/json; charset=utf-8", code=200):
             data = body.encode("utf-8")
             self.send_response(code)
@@ -255,6 +269,10 @@ def make_handler(cfg):
             n = int(self.headers.get("Content-Length", 0))
             body = json.loads(self.rfile.read(n) or b"{}")
             try:
+                if self.path == "/api/exit":
+                    self._json({"ok": True})
+                    webui.request_shutdown(self.server_ref)
+                    return
                 if self.path == "/api/preview":
                     by = make_by(body)
                     return self._json({"by": by, "rows": preview(cfg, by, int(body.get("top") or 50))})
@@ -282,11 +300,5 @@ if __name__ == "__main__":
     ap.add_argument("--no-browser", action="store_true")
     a = ap.parse_args()
     cfg = load_config(a.config)
-    url = f"http://127.0.0.1:{a.port}/"
-    print(f"系列まとめ 起動: {url}  (この窓は閉じずに、ブラウザで操作してください。終了は Ctrl+C)")
-    if not a.no_browser:
-        webbrowser.open(url)
-    try:
-        HTTPServer(("127.0.0.1", a.port), make_handler(cfg)).serve_forever()
-    except KeyboardInterrupt:
-        pass
+    sys.exit(webui.serve(make_handler(cfg), "127.0.0.1", a.port,
+                         "系列まとめ", open_browser=not a.no_browser))

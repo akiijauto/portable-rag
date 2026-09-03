@@ -11,7 +11,9 @@ import subprocess
 import sys
 import urllib.parse
 import webbrowser
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
+
+from rag import webui
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(HERE, "launcher.json")
@@ -204,7 +206,7 @@ ul.pick li{cursor:pointer}ul.pick li:hover{background:#eef4fb}.warn{color:#b00}#
 <header><h1 id="title"></h1>
 <label>ボタンの大きさ <select id="size"><option value="small">小</option><option value="medium">中</option><option value="large">大</option></select></label>
 <label>並び <select id="cols"><option value="1">1列</option><option value="2">2列</option><option value="3">3列</option></select></label>
-<button id="toggleEdit">ボタンを編集</button></header>
+<button id="toggleEdit">ボタンを編集</button><button id="exit" style="margin-left:auto;border:1px solid #c33;color:#c33;background:#fff">終了</button></header>
 <main><section><div id="grid"></div></section>
 <aside>
 <div id="rag"><h2>検索対象フォルダ</h2>
@@ -226,6 +228,16 @@ ul.pick li{cursor:pointer}ul.pick li:hover{background:#eef4fb}.warn{color:#b00}#
 <ul id="files"></ul><p class="small">一覧のファイルをクリックすると実行ファイル欄に入ります。</p>
 </div></aside></main>
 <script>
+async function doExit(){
+  if(!confirm('コントロールUIを終了します。コマンドラインの窓も閉じます。よろしいですか？
+（ボタンから起動した別窓のプログラムは終了しません）'))return;
+  try{await fetch('/api/exit',{method:'POST'});}catch(e){}
+  document.body.innerHTML='<div style="max-width:640px;margin:80px auto;'
+    +'font-family:system-ui,Meiryo,sans-serif;text-align:center;color:#444">'
+    +'<h2>終了しました</h2><p>コマンドラインの窓は自動で閉じます。</p>'
+    +'<p style="color:#888">このタブは閉じて構いません。</p></div>';
+}
+
 let cfg=null,edit=false;const $=id=>document.getElementById(id);
 const SZ={small:['44px','14px','12px'],medium:['64px','16px','13px'],large:['96px','20px','15px']};
 async function api(p,body){const r=await fetch(p,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});return r.json();}
@@ -248,6 +260,7 @@ async function tool(a,i){if(a==='edit'){const b=cfg.buttons[i];$('idx').value=i;
  if(a==='down'&&i<cfg.buttons.length-1)[cfg.buttons[i+1],cfg.buttons[i]]=[cfg.buttons[i],cfg.buttons[i+1]];
  await saveCfg();}
 $('size').onchange=e=>{cfg.size=e.target.value;saveCfg();};$('cols').onchange=e=>{cfg.columns=+e.target.value;saveCfg();};
+$('exit').onclick=doExit;
 $('toggleEdit').onclick=()=>{edit=!edit;$('editor').classList.toggle('on',edit);$('toggleEdit').textContent=edit?'編集を終了':'ボタンを編集';render();};
 $('save').onclick=async()=>{const b={name:$('f_name').value.trim(),desc:$('f_desc').value.trim(),path:$('f_path').value.trim(),args:$('f_args').value.trim()};
  if(!b.name||!b.path){alert('ボタン名と実行ファイルは必須です');return;}const i=+$('idx').value;if(i>=0)cfg.buttons[i]=b;else cfg.buttons.push(b);clearForm();await saveCfg();};
@@ -281,6 +294,8 @@ loadRag();
 
 
 class Handler(BaseHTTPRequestHandler):
+    server_ref = None      # webui.serve が差し込む
+
     def _json(self, obj, code=200):
         data = json.dumps(obj, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
@@ -315,6 +330,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         n = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(n) or b"{}")
+        if self.path == "/api/exit":
+            self._json({"ok": True})
+            webui.request_shutdown(self.server_ref)
+            return
         if self.path == "/api/config":
             save_config(body)
             self._json({"ok": True})
@@ -345,11 +364,5 @@ if __name__ == "__main__":
     a = ap.parse_args()
     if not os.path.exists(CONFIG_PATH):
         save_config(load_config())
-    url = f"http://127.0.0.1:{a.port}/"
-    print(f"コントロールUI 起動: {url}  (Ctrl+C で終了)")
-    if not a.no_browser:
-        webbrowser.open(url)
-    try:
-        HTTPServer(("127.0.0.1", a.port), Handler).serve_forever()
-    except KeyboardInterrupt:
-        pass
+    sys.exit(webui.serve(Handler, "127.0.0.1", a.port,
+                         "コントロールUI", open_browser=not a.no_browser))

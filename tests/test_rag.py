@@ -5,6 +5,8 @@ import shutil
 import sys
 import sqlite3
 import tempfile
+import threading
+import time
 import types
 import unittest
 
@@ -21,6 +23,7 @@ from rag.search import Searcher               # noqa: E402
 from rag.tokenizer import tokenize            # noqa: E402
 from rag.store import Store                  # noqa: E402
 from rag import syncdir                      # noqa: E402
+from rag import webui                        # noqa: E402
 
 
 class TestUnits(unittest.TestCase):
@@ -338,6 +341,90 @@ class TestConfigEncoding(unittest.TestCase):
             self.assertIn("カンマ", str(cm.exception))     # 直し方まで書く
         finally:
             shutil.rmtree(d, ignore_errors=True)
+
+
+
+class TestJobProgress(unittest.TestCase):
+    """重い処理を背後で走らせ、進捗を読み取れること。
+    2026-09-03、「ボタンを押したあと動いているのか止まっているのか分からない」という
+    要望を受けて追加。元は単一スレッドで、処理中はサーバーが一切応答できなかった。"""
+
+    def test_reports_progress_while_running(self):
+        job = webui.Job()
+        gate = threading.Event()
+
+        def work(log):
+            log("1件目")
+            gate.wait(5)                                   # 実行中の状態を観測するため止める
+            log("2件目")
+
+        self.assertTrue(job.start("テスト処理", work))
+        for _ in range(50):                                # 最初の行が出るまで待つ
+            if job.snapshot()["lines"]:
+                break
+            time.sleep(0.02)
+        s = job.snapshot()
+        self.assertEqual(s["state"], "running")            # 実行中でも snapshot は返る
+        self.assertEqual(s["name"], "テスト処理")
+        self.assertEqual(s["lines"], ["1件目"])
+        self.assertFalse(job.start("別の処理", lambda log: None))   # 二重起動はしない
+
+        gate.set()
+        for _ in range(100):
+            if job.snapshot()["state"] != "running":
+                break
+            time.sleep(0.02)
+        s = job.snapshot()
+        self.assertEqual(s["state"], "done")
+        self.assertEqual(s["lines"], ["1件目", "2件目"])
+        self.assertTrue(job.start("次の処理", lambda log: None))    # 完了後は再度開始できる
+
+    def test_error_is_captured_not_raised(self):
+        """処理が落ちても画面に理由が出る。サーバーごと死なせない。"""
+        job = webui.Job()
+        job.start("壊れる処理", lambda log: (_ for _ in ()).throw(ValueError("わざと失敗")))
+        for _ in range(100):
+            if job.snapshot()["state"] != "running":
+                break
+            time.sleep(0.02)
+        s = job.snapshot()
+        self.assertEqual(s["state"], "error")
+        self.assertIn("わざと失敗", s["error"])
+        self.assertTrue(any("エラー" in ln for ln in s["lines"]))
+
+    def test_idle_snapshot_is_safe(self):
+        s = webui.Job().snapshot()
+        self.assertEqual(s["state"], "idle")
+        self.assertEqual(s["elapsed"], 0)
+        self.assertEqual(s["lines"], [])
+
+    def test_old_lines_are_dropped_with_a_note(self):
+        job = webui.Job()
+        for i in range(webui.MAX_LINES + 50):
+            job.log(f"line{i}")
+        s = job.snapshot()
+        self.assertLessEqual(len(s["lines"]), webui.MAX_LINES)
+        self.assertIn("省略", s["lines"][0])                # 捨てた事実は残す
+
+
+class TestBatFiles(unittest.TestCase):
+    """終了ボタンで窓が閉じるには、正常終了時に pause してはいけない。"""
+
+    def test_web_apps_pause_only_on_error(self):
+        for name in ("run_search.bat", "launcher.bat", "bundle.bat"):
+            path = os.path.join(ROOT, name)
+            with open(path, "rb") as f:
+                text = f.read().decode("cp932")
+            self.assertIn("if errorlevel 1", text, name)
+            # pause が errorlevel の判定より前に単独で現れていないこと
+            self.assertLess(text.index("if errorlevel 1"), text.index("pause"), name)
+
+    def test_build_index_always_pauses(self):
+        # こちらは結果を読ませたいので常に止める
+        with open(os.path.join(ROOT, "build_index.bat"), "rb") as f:
+            text = f.read().decode("cp932")
+        self.assertIn("pause", text)
+        self.assertNotIn("if errorlevel", text)
 
 
 if __name__ == "__main__":
