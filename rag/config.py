@@ -39,11 +39,33 @@ DEFAULTS = {
 }
 
 
+def _read_config_text(path):
+    """config.json を読む。**メモ帳で ANSI 保存された場合に備えて cp932 も試す。**
+
+    index_dir に日本語のパスを書くことがあり、cp932 で保存されると utf-8 決め打ちでは
+    UnicodeDecodeError になる。原因が分かりにくいので html_extract と同じ方式で受ける。
+    """
+    with open(path, "rb") as f:
+        raw = f.read()
+    for enc in ("utf-8-sig", "utf-8", "cp932"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    raise ValueError(f"{path} の文字コードが読めません。UTF-8 で保存し直してください")
+
+
 def load_config(path="config.json"):
     cfg = dict(DEFAULTS)
     if path and os.path.exists(path):
-        with open(path, encoding="utf-8") as f:
-            user = json.load(f)
+        text = _read_config_text(path)
+        try:
+            user = json.loads(text)
+        except json.JSONDecodeError as e:
+            # 素の JSONDecodeError は原因が分かりにくいので、直し方まで書く
+            raise ValueError(
+                f"{path} の書式が JSON として読めません（{e.lineno}行目: {e.msg}）。"
+                "カンマの付け忘れ、全角の引用符、末尾の余分なカンマがよくある原因です") from e
         unknown = set(user) - set(DEFAULTS)
         if unknown:
             raise ValueError(f"config.json に未知のキーがあります: {sorted(unknown)}")

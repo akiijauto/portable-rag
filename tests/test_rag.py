@@ -300,5 +300,45 @@ class TestSchemaMigration(unittest.TestCase):
             shutil.rmtree(d, ignore_errors=True)
 
 
+
+class TestConfigEncoding(unittest.TestCase):
+    """config.json はユーザーがメモ帳で編集する。文字コードと書式の事故を親切に扱う。"""
+
+    def _write(self, data, encoding):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config.json")
+        with open(p, "wb") as f:
+            f.write(data.encode(encoding))
+        return d, p
+
+    def test_reads_cp932_saved_config(self):
+        # メモ帳の ANSI 保存。index_dir に日本語パスを書くと utf-8 決め打ちでは落ちていた
+        body = '{"index_dir": "C:/索引フォルダ", "source_dirs": ["./sample_docs"]}'
+        d, p = self._write(body, "cp932")
+        try:
+            cfg = load_config(p)
+            self.assertTrue(cfg["index_dir"].endswith("索引フォルダ"))
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_reads_utf8_bom_config(self):
+        body = '{"top_k": 3}'
+        d, p = self._write(body, "utf-8-sig")
+        try:
+            self.assertEqual(load_config(p)["top_k"], 3)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_broken_json_explains_how_to_fix(self):
+        d, p = self._write('{"top_k": 3,}', "utf-8")       # 末尾の余分なカンマ
+        try:
+            with self.assertRaises(ValueError) as cm:
+                load_config(p)
+            self.assertIn("JSON", str(cm.exception))
+            self.assertIn("カンマ", str(cm.exception))     # 直し方まで書く
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
