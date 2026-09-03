@@ -3,7 +3,9 @@ import json
 import os
 import shutil
 import sys
+import sqlite3
 import tempfile
+import types
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -17,6 +19,8 @@ from rag.html_extract import extract          # noqa: E402
 from rag.indexer import build                 # noqa: E402
 from rag.search import Searcher               # noqa: E402
 from rag.tokenizer import tokenize            # noqa: E402
+from rag.store import Store                  # noqa: E402
+from rag import syncdir                      # noqa: E402
 
 
 class TestUnits(unittest.TestCase):
@@ -175,6 +179,125 @@ class TestBundle(unittest.TestCase):
         self.assertEqual(sum(r["docs"] for r in rows), 6)          # サンプル6件がすべてどこかに入る
         self.assertTrue(all(r["chars"] is None for r in rows))     # name はパスだけで数える（本文は読まない）
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+
+class TestSyncDirWarning(unittest.TestCase):
+    """索引の保存先がクラウド同期フォルダかどうかの判定。
+    2026-09-03、同期配下に置いたせいで索引作成が10倍遅くなった実測を受けて追加。"""
+
+    def test_detects_google_drive_variants(self):
+        # 日本語版 Windows のフォルダ名を取りこぼしていた実バグの回帰テスト
+        for path in [r"G:\マイドライブ\index", r"C:\Users\x\Google ドライブ\index",
+                     r"C:\Users\x\Googleドライブ\index", r"C:\Users\x\GoogleDrive\index"]:
+            self.assertEqual(syncdir.detect(path), "Google ドライブ", path)
+
+    def test_detects_other_services(self):
+        self.assertEqual(syncdir.detect(r"C:\Users\x\OneDrive\index"), "OneDrive")
+        self.assertEqual(syncdir.detect(r"C:\Users\x\Dropbox\index"), "Dropbox")
+
+    def test_local_path_is_not_flagged(self):
+        self.assertIsNone(syncdir.detect(r"C:\portable-rag-index"))
+        self.assertIsNone(syncdir.detect(os.path.join(ROOT, "index")))
+
+    def test_warn_emits_message_only_when_synced(self):
+        msgs = []
+        self.assertEqual(syncdir.warn_if_synced(r"G:\マイドライブ\index", msgs.append), "Google ドライブ")
+        self.assertTrue(any("警告" in m for m in msgs))
+        msgs.clear()
+        self.assertIsNone(syncdir.warn_if_synced(r"C:\local\index", msgs.append))
+        self.assertEqual(msgs, [])                                  # 同期外では何も出さない
+
+
+class TestSchemaMigration(unittest.TestCase):
+    """旧形式（postings.term に文字列）から新形式（postings.term_id）への移行。"""
+
+    OLD_SCHEMA = """
+    CREATE TABLE docs(doc_id INTEGER PRIMARY KEY, path TEXT UNIQUE, title TEXT,
+      mtime REAL, size INTEGER, sha1 TEXT, nchunks INTEGER, indexed_at TEXT);
+    CREATE TABLE chunks(chunk_id INTEGER PRIMARY KEY, doc_id INTEGER, ord INTEGER,
+      text TEXT, length INTEGER);
+    CREATE TABLE postings(term TEXT, chunk_id INTEGER, tf INTEGER);
+    CREATE INDEX ix_post_term ON postings(term);
+    CREATE INDEX ix_post_chunk ON postings(chunk_id);
+    CREATE TABLE vectors(chunk_id INTEGER PRIMARY KEY, dim INTEGER, vec BLOB);
+    CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
+    """
+    ROWS = [("返品", 1, 2), ("送料", 1, 1), ("返品", 2, 5), ("あい", 3, 1)]
+
+    def _make_old(self):
+        d = tempfile.mkdtemp()
+        con = sqlite3.connect(os.path.join(d, "rag.sqlite"))
+        con.executescript(self.OLD_SCHEMA)
+        con.execute("INSERT INTO chunks VALUES(1,1,0,'返品と送料',5)")
+        con.execute("INSERT INTO chunks VALUES(2,1,1,'返品のみ',4)")
+        con.execute("INSERT INTO chunks VALUES(3,2,0,'あい',2)")
+        con.executemany("INSERT INTO postings VALUES(?,?,?)", self.ROWS)
+        con.commit()
+        con.close()
+        return d
+
+    def test_migration_preserves_every_posting(self):
+        d = self._make_old()
+        try:
+            st = Store(d)
+            got = set(st.con.execute(
+                "SELECT t.term, p.chunk_id, p.tf FROM postings p "
+                "JOIN terms t ON t.term_id = p.term_id"))
+            self.assertEqual(got, set(self.ROWS))
+            self.assertEqual(st.get_meta("schema_version"), 2)
+            self.assertEqual(sorted(st.postings("返品")), [(1, 2), (2, 5)])
+            self.assertEqual(st.postings("存在しない語"), [])        # 未知語は空。例外にしない
+            st.con.close()
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_migration_is_atomic_when_interrupted(self):
+        """途中で落ちても旧形式のまま残り、やり直せば移行できる。
+        索引を後からまとめて作る方式を採らなかったのは、この中断時の故障を避けるため。"""
+        import rag.store as store_mod
+
+        class Flaky(sqlite3.Connection):
+            def execute(self, sql, *a):
+                if sql.strip().upper().startswith("INSERT INTO POSTINGS_NEW"):
+                    raise KeyboardInterrupt("中断をシミュレート")
+                return super().execute(sql, *a)
+
+        d = self._make_old()
+        real = store_mod.sqlite3
+        store_mod.sqlite3 = types.SimpleNamespace(
+            connect=lambda p, **kw: sqlite3.connect(p, factory=Flaky, **kw))
+        try:
+            with self.assertRaises(KeyboardInterrupt):
+                store_mod.Store(d)
+        finally:
+            store_mod.sqlite3 = real
+
+        try:
+            con = sqlite3.connect(os.path.join(d, "rag.sqlite"))
+            cols = [r[1] for r in con.execute("PRAGMA table_info(postings)")]
+            tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            self.assertEqual(cols, ["term", "chunk_id", "tf"])       # 旧形式のまま無傷
+            self.assertNotIn("postings_new", tables)                 # 中間テーブルが残らない
+            self.assertEqual(con.execute("SELECT COUNT(*) FROM postings").fetchone()[0], len(self.ROWS))
+            con.close()
+
+            st = Store(d)                                            # やり直せば移行できる
+            self.assertEqual([r[1] for r in st.con.execute("PRAGMA table_info(postings)")],
+                             ["term_id", "chunk_id", "tf"])
+            st.con.close()
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_cache_size_pragma_is_applied(self):
+        """既定の2MBのままだと索引が育った時点で急に遅くなるため、明示的に広げている。"""
+        d = tempfile.mkdtemp()
+        try:
+            st = Store(d, cache_mb=64)
+            self.assertEqual(st.con.execute("PRAGMA cache_size").fetchone()[0], -65536)
+            st.con.close()
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
 
 
 if __name__ == "__main__":

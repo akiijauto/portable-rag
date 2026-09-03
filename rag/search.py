@@ -11,7 +11,7 @@ from .tokenizer import tokenize
 class Searcher:
     def __init__(self, cfg):
         self.cfg = cfg
-        self.store = Store(cfg["index_dir"])
+        self.store = Store(cfg["index_dir"], cache_mb=cfg.get("sqlite_cache_mb", 256))
         self._vec_cache = None
 
     # ---- BM25 ----

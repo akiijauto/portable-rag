@@ -5,6 +5,7 @@ import sys
 import time
 
 from . import embed
+from . import syncdir
 from .chunker import split_chunks
 from .html_extract import extract
 from .store import Store, file_sha1
@@ -24,7 +25,9 @@ def scan(cfg):
 
 
 def build(cfg, full=False, log=print):
-    store = Store(cfg["index_dir"])
+    # 索引の保存先が同期フォルダだと10倍近く遅くなる。処理は止めず警告だけ出す。
+    syncdir.warn_if_synced(cfg["index_dir"], log)
+    store = Store(cfg["index_dir"], cache_mb=cfg.get("sqlite_cache_mb", 256), log=log)
     known = store.known_docs()
     now = datetime.datetime.now().isoformat(timespec="seconds")
     seen, added, updated, skipped, removed = set(), 0, 0, 0, 0
