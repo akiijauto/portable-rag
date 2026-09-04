@@ -1,0 +1,51 @@
+name: CI
+
+# このツールの売りは「標準ライブラリだけで、古い業務端末（Python 3.9）でも動く」こと。
+# CI ではその2点を毎回確かめる。pip install は意図的に一切行わない。
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: テスト (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      # 片方が落ちても、もう片方の結果を最後まで見たいので打ち切らない
+      fail-fast: false
+      matrix:
+        # 3.9 = 要件の下限（古い業務端末）。3.13 = 新しめの版でも壊れていないことの確認。
+        python-version: ["3.9", "3.13"]
+
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@v7
+
+      - name: Python ${{ matrix.python-version }} を用意
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # requirements-optional.txt（sentence-transformers / numpy）は任意依存。
+      # ここで入れてしまうと「標準ライブラリだけで動く」ことの検証にならないため入れない。
+      # 入っていないことを実際に確かめてから、次のステップでテストを走らせる。
+      - name: 外部パッケージが入っていないことを確認
+        run: |
+          echo "--- 導入済みパッケージ一覧 ---"
+          python -m pip list
+          echo "--- 任意依存が入っていないことの確認 ---"
+          python - <<'PY'
+          import importlib.util
+          import sys
+
+          optional = ["numpy", "sentence_transformers", "torch", "transformers"]
+          found = [m for m in optional if importlib.util.find_spec(m) is not None]
+          if found:
+              sys.exit("NG: 任意依存が入っています: %s / これでは標準ライブラリだけで動く検証にならない" % found)
+          print("OK: 任意依存はどれも入っていない。以降のテストは標準ライブラリだけで動く。")
+          PY
+
+      - name: テスト実行（標準ライブラリのみ・全31件）
+        run: python -m unittest discover -s tests -v

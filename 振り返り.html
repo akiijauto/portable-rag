@@ -29,7 +29,7 @@
 <tr><td>旧ボタン設定（launcher.json）が bundle.py を指したまま残る</td><td>launcher.json は git 管理外で、配布先ごとに残る</td><td>launcher.py 読み込み時に、同じ場所へ bundle_app.py があれば自動で差し替える</td><td>設定ファイルが利用者側に残る前提で、移行は読み込み側で吸収する</td></tr></table>
 
 <h2>2-5. 作業 clone を AI開発 配下へ移動（2026-09-03）</h2>
-<p><code>C:\Users\<ユーザー名>\portable-rag</code> → <code>C:\Users\<ユーザー名>\AI開発\portable-rag</code>。git は無傷（HEAD・status・remote すべて維持）だったが、<b>移動だけでは終わらないものが4つあった</b>。</p>
+<p><code>C:\Users\&lt;ユーザー名&gt;\portable-rag</code> → <code>C:\Users\&lt;ユーザー名&gt;\AI開発\portable-rag</code>。git は無傷（HEAD・status・remote すべて維持）だったが、<b>移動だけでは終わらないものが4つあった</b>。</p>
 <table><tr><th>残っていたもの</th><th>なぜ問題か</th><th>対応</th></tr>
 <tr><td>親リポジトリの <code>.gitignore</code> に <code>portable-rag/</code> が無い</td><td>独立リポジトリの全ファイルが親から未追跡として見え、誤って親へコミットされる恐れ</td><td>他の独立リポジトリと同じ扱いで追加</td></tr>
 <tr><td><code>launcher.json</code> のボタンパス</td><td>旧パスを<b>絶対パス</b>で保持しており、ボタンが全部壊れる</td><td>新パスへ書き換え、launcher.py から解決できることを確認</td></tr>

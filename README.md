@@ -1,6 +1,10 @@
 # portable-rag
 
-API 不可・Google ドライブのみ・インストール不要という制約の業務PC向けに、HTML 約5,000件をローカルで検索し、AI（ブラウザの Gemini、スプレッドシートの AI 関数）に渡しやすい形で出力する Python 製 RAG 検索ツール。
+[![CI](https://github.com/akiijauto/portable-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/akiijauto/portable-rag/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/)
+
+API 不可・Google ドライブのみ・インストール不要という制約のある業務PC向けに、HTML 約5,000件をローカルで検索し、AI（ブラウザの Gemini、スプレッドシートの AI 関数）に渡しやすい形で出力する Python 製 RAG 検索ツール。
 
 - 標準ライブラリのみで動作（BM25 / 文字 bigram / SQLite 転置索引 / 差分更新）
 - `sentence-transformers` 導入時のみベクトル検索を自動併用（RRF 統合）
@@ -29,5 +33,19 @@ python rag_app.py                # http://127.0.0.1:8765
 python launcher.py               # コントロールUI http://127.0.0.1:8766
 python bundle_app.py             # 系列まとめ（ブラウザ画面 http://127.0.0.1:8768）
 python bundle.py                 # 系列まとめ（コマンド版）
-python tests/test_rag.py         # テスト
+python -m unittest discover -s tests   # テスト（31件）
 ```
+
+## テスト
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+外部ライブラリを入れずに 31 件が通る。CI（GitHub Actions）でも **Python 3.9 と 3.13 の両方**で、
+**任意依存が入っていない状態**であることを確かめたうえで実行している。
+「標準ライブラリだけで動く」を主張だけで終わらせないための構成。
+
+## ライセンス
+
+MIT License（[LICENSE](LICENSE)）
